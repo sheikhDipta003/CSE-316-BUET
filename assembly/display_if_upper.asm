@@ -1,0 +1,20 @@
+.MODEL SMALL
+.STACK 100H
+.DATA
+.CODE
+MAIN PROC  
+   MOV DL, 'B'
+   
+   CMP DL, 'A'
+   JNAE _ELSE
+   CMP DL, 'Z'
+   JNBE _ELSE
+   MOV AH, 2
+   INT 21H
+   JMP  _ELSE
+_ELSE:
+    MOV AH, 4CH
+    INT 21H 
+     
+MAIN ENDP
+END MAIN

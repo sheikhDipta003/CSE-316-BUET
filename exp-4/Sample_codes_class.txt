@@ -1,0 +1,156 @@
+/*
+ * serial_comm_code.c
+ *
+ * Created: 1/26/2023 3:01:03 PM
+ * Author : hp
+ */ 
+
+#define F_CPU 1000000UL
+#include <avr/io.h>
+#include <util/delay.h>
+#include <stdio.h>
+
+//////////////////////////////////////////////////////////////////////////
+//SPI
+void SPI_MasterInit(void)
+{
+	/* Set MOSI and SCK output, all others input */
+	DDRB = (1<<DDB5)|(1<<DDB7);
+	/* Enable SPI, Master, set clock rate f/16 */
+	SPCR = (1<<SPE)|(1<<MSTR)|(1<<SPR0);
+}
+
+void SPI_MasterTransmit(char cData)
+{
+	/* Start transmission */
+	SPDR = cData;
+	/* Wait for transmission complete */
+	while(!(SPSR & (1<<SPIF)));
+}
+
+void SPI_SlaveInit(void)
+{
+	/* Set MISO output, all others input */
+	DDRB = (1<<DDB6);
+	/* Enable SPI */
+	SPCR = (1<<SPE);
+}
+
+char SPI_SlaveReceive(void)
+{
+	/* Wait for reception complete */
+	while(!(SPSR & (1<<SPIF)));
+	/* Return data register */
+	return SPDR;
+}
+
+//perform duplex operation: send and receive simultaneously
+char SPI_Transceiver(char cData)
+{
+	/* Start transmission */
+	SPDR = cData;
+	/* Wait for transmission complete */
+	while(!(SPSR & (1<<SPIF)));
+	/* Return newly received data */
+	return SPDR;
+}
+//////////////////////////////////////////////////////////////////////////
+
+
+//////////////////////////////////////////////////////////////////////////
+//UART
+void USART_init(void)
+{
+	UCSRA = 0b00000010;  // double speed
+	UCSRB = 0b00011000;  // Enable Tx and Rx, polling
+	UCSRC = 0b10000110;  // Async mode, no parity, 1 stop bit,8 data bits
+	//in double-speed mode, UBRR = clock/(8xbaud rate) - 1
+	UBRRH = 0;
+	UBRRL = 12; // Baud rate 9600bps, assuming 1MHz clock
+	
+}
+
+//send an 8bit char through serial port TX of atmega
+void UART_send(unsigned char data){
+	// wait until UDRE flag is set to logic 1	
+	while ((UCSRA & (1<<UDRE)) == 0x00);	
+	UDR = data; // Write character to UDR for transmission
+}
+
+//receive an 8bit char through serial port RX of atmega
+unsigned char UART_receive(void){	
+	// Wait until RXC flag is set to logic 1	
+	while ((UCSRA & (1<<RXC)) == 0x00);	
+	return UDR; // return the received character from UDR
+}
+
+//send 9bit data through serial port TX of atmega
+void UART_transmit(unsigned int data){
+	//wait for empty transmission buffer
+	while(!(UCSRA & (1<<UDRE)));
+	
+	//copy 9-th bit to TXB8 of UCSRB Reg
+	//if the bit is 0
+	UCSRB &= ~(1<<TXB8);
+	//else if the bit is 1
+	UCSRB |= (1<<TXB8);
+	
+	//send the lower byte of data
+	UDR = data;
+}
+
+//receive 9bit data through serial port RX of atmega
+unsigned int _UART_receive(){
+	unsigned char status, high, low;
+	
+	//wait until reception of data is complete
+	while(!(UCSRA & (1<<RXC)));
+	
+	//store the status before reading from UDR
+	status = UCSRA;
+	high = UCSRB;
+	low = UDR;
+	
+	//if error return -1
+	if(status & (1<<FE) | (1<<DOR) | (1<<PE))	return -1;
+	
+	//else extract the 9-th bit first, then concatenate with 'low' and return it
+	high = (high >> 1) & 0x01;
+	return ((high << 8) | low);
+}
+//////////////////////////////////////////////////////////////////////////
+
+int main(void)
+{	
+	//////////////////////////////////////////////////////////////////////////
+	//unsigned char a;	//Code to initialize baudrate, TXD, RXD, and so on is not shown here	
+	//// Initialize the standard IO handlers	
+	//stdout = fdevopen(UART_send, NULL);
+	//stdin = fdevopen(NULL, UART_receive);
+	//// Start using printf, scanf as usual	
+	//while (1){		
+		//printf("\n\rEnter a = ");		
+		//scanf("%c", &a); 
+		//printf("%c", a);	
+	//}
+	//////////////////////////////////////////////////////////////////////////
+	
+	
+	//////////////////////////////////////////////////////////////////////////
+	unsigned char i;
+	USART_init(); // initialize USART
+	while (1) {
+		for (i=0; i<10; i++)
+		{
+			UART_send('4');
+			_delay_ms(500);
+		}
+		for (i=0; i < 10; i++)	
+		{
+			UART_send('6');
+			_delay_ms(500);
+		}
+	}
+	//////////////////////////////////////////////////////////////////////////
+}
+
